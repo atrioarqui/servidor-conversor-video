@@ -17,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // Middlewares
-app.use(cors()); // Habilita CORS para permitir que o site no Netlify se comunique com este servidor
+app.use(cors()); // <-- ESTA LINHA É A SOLUÇÃO PARA O ERRO DE CORS
 
 // Rota principal para verificar se o servidor está no ar
 app.get('/', (req, res) => {
@@ -41,7 +41,7 @@ app.post('/convert', (req, res) => {
       return res.status(400).send('Nenhum arquivo enviado.');
     }
 
-    const format = 'mp4'; // O objetivo principal é sempre MP4
+    const format = 'mp4';
     outputFile = path.join(os.tmpdir(), `out-${Date.now()}.${format}`);
 
     ffmpeg(inputFile)
@@ -50,7 +50,7 @@ app.post('/convert', (req, res) => {
       .audioBitrate('128k')
       .outputOptions([
         '-preset veryfast',
-        '-profile:v main', // Perfil compatível com WhatsApp
+        '-profile:v main',
         '-level 3.1',
         '-crf 23',
         '-movflags +faststart',
@@ -59,13 +59,12 @@ app.post('/convert', (req, res) => {
       ])
       .output(outputFile)
       .on('end', () => {
-        // Envia o arquivo convertido de volta e depois apaga os arquivos temporários
         res.sendFile(outputFile, (err) => {
-          fs.unlinkSync(inputFile);
-
-          // Verificamos se outputFile existe antes de tentar deletá-lo
-          if (fs.existsSync(outputFile)) {
-             fs.unlinkSync(outputFile);
+          try {
+            fs.unlinkSync(inputFile);
+            fs.unlinkSync(outputFile);
+          } catch (e) {
+            console.error('Erro ao limpar arquivos temporários:', e);
           }
           if (err) {
             console.error('Erro ao enviar arquivo:', err);
@@ -74,7 +73,9 @@ app.post('/convert', (req, res) => {
       })
       .on('error', (err) => {
         console.error('Erro no FFMPEG:', err.message);
-        fs.unlinkSync(inputFile);
+        try {
+          fs.unlinkSync(inputFile);
+        } catch (e) {}
         res.status(500).send(`Erro no FFMPEG: ${err.message}`);
       })
       .run();
